@@ -29,6 +29,9 @@ fun ChatScreen(
     onBack: () -> Unit
 ) {
     val chatViewModel = remember { ChatViewModel(bridgeViewModel) }
+    LaunchedEffect(sessionId) {
+        chatViewModel.startListening(sessionId)
+    }
     val messages by chatViewModel.messages.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()

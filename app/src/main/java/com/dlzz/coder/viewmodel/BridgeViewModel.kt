@@ -28,7 +28,17 @@ class BridgeViewModel : ViewModel() {
         }
         viewModelScope.launch {
             client.events.collect { msg ->
-                _events.value = _events.value + msg
+                val currentList = _events.value.toMutableList()
+                currentList.add(msg)
+                _events.value = currentList
+
+                if (msg.sessionId.isNotEmpty()) {
+                    val sessionMap = _sessionEvents.value.toMutableMap()
+                    val sessionList = (sessionMap[msg.sessionId] ?: emptyList()).toMutableList()
+                    sessionList.add(msg)
+                    sessionMap[msg.sessionId] = sessionList
+                    _sessionEvents.value = sessionMap
+                }
             }
         }
     }
@@ -40,6 +50,13 @@ class BridgeViewModel : ViewModel() {
     fun disconnect() {
         client.disconnect()
         _isConnected.value = false
+    }
+
+    private val _sessionEvents = MutableStateFlow<Map<String, List<ServerWireMessage>>>(emptyMap())
+    val sessionEvents: StateFlow<Map<String, List<ServerWireMessage>>> = _sessionEvents
+
+    fun sessionMessages(sessionId: String): List<ServerWireMessage> {
+        return _sessionEvents.value[sessionId] ?: emptyList()
     }
 
     override fun onCleared() {
