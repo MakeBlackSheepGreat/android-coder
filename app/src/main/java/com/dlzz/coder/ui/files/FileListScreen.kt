@@ -2,7 +2,6 @@ package com.dlzz.coder.ui.files
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,18 +25,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.dlzz.coder.bridge.HostSession
 import com.dlzz.coder.ui.i18n.AppStrings
+import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.viewmodel.BridgeViewModel
 import com.dlzz.coder.viewmodel.FileViewModel
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.shapes.RoundedRectangle
 
 @Composable
 fun FileListScreen(
@@ -49,7 +42,6 @@ fun FileListScreen(
     val hostSessions by bridgeViewModel.hostSessions.collectAsState()
     val language by bridgeViewModel.language.collectAsState()
     val strings = AppStrings.of(language)
-    val isDark = isSystemInDarkTheme()
     var selectedKey by remember { mutableStateOf("") }
     val selectedSession = remember(hostSessions, selectedKey) {
         hostSessions.firstOrNull { it.key == selectedKey } ?: hostSessions.firstOrNull()
@@ -94,18 +86,7 @@ fun FileListScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .drawBackdrop(
-                        backdrop = rememberCanvasBackdrop {},
-                        shape = { RoundedRectangle(12.dp) },
-                        effects = {
-                            vibrancy()
-                            blur(2f.dp.toPx())
-                            lens(8f.dp.toPx(), 16f.dp.toPx())
-                        },
-                        onDrawSurface = {
-                            drawRect(if (isDark) Color.White.copy(0.05f) else Color.White.copy(0.4f))
-                        }
-                    )
+                    .glassCard(cornerRadius = 12.dp, blur = 2.dp, lensNear = 8.dp, lensFar = 16.dp)
                     .clickable {
                         selectedSession?.let { onFileClick(it.host.id, it.session.sessionId, file.path) }
                     }

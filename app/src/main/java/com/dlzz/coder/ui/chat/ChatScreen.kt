@@ -30,14 +30,10 @@ import com.dlzz.coder.bridge.ToolCall
 import com.dlzz.coder.bridge.ToolState
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.i18n.Strings
+import com.dlzz.coder.ui.theme.glassBubble
+import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.viewmodel.BridgeViewModel
 import com.dlzz.coder.viewmodel.ChatViewModel
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.shapes.RoundedRectangle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,27 +144,13 @@ fun ChatScreen(
 private fun MessageBubble(msg: ChatMessage) {
     val isUser = msg.role == "user"
     val isDark = isSystemInDarkTheme()
+    val surfaceColor = when {
+        isUser -> if (isDark) Color(0xFF0091FF).copy(0.18f) else Color(0xFF0088FF).copy(0.2f)
+        else -> if (isDark) Color.White.copy(0.06f) else Color.White.copy(0.5f)
+    }
     Box(
         Modifier
-            .drawBackdrop(
-                backdrop = rememberCanvasBackdrop {},
-                shape = { RoundedRectangle(12.dp) },
-                effects = {
-                    vibrancy()
-                    blur(2f.dp.toPx())
-                    lens(8f.dp.toPx(), 16f.dp.toPx())
-                },
-                onDrawSurface = {
-                    drawRect(
-                        if (isUser)
-                            Color(0xFF0091FF).copy(0.2f)
-                        else if (isDark)
-                            Color.White.copy(0.06f)
-                        else
-                            Color.White.copy(0.5f)
-                    )
-                }
-            )
+            .glassBubble(cornerRadius = 12.dp, surfaceColor = surfaceColor)
             .padding(12.dp)
             .widthIn(max = 300.dp)
     ) {
@@ -178,9 +160,7 @@ private fun MessageBubble(msg: ChatMessage) {
 
 @Composable
 private fun ToolCallCard(tool: ToolCall, strings: Strings) {
-    val isDark = isSystemInDarkTheme()
     var expanded by remember { mutableStateOf(false) }
-    val surfaceColor = if (isDark) Color.White.copy(0.05f) else Color.White.copy(0.45f)
 
     val (stateLabel, stateIcon, stateColor) = when (tool.state) {
         ToolState.STARTED -> Triple(strings.toolStarted, Icons.Default.Schedule, Color(0xFF854F0B))
@@ -192,16 +172,7 @@ private fun ToolCallCard(tool: ToolCall, strings: Strings) {
     Column(
         Modifier
             .fillMaxWidth()
-            .drawBackdrop(
-                backdrop = rememberCanvasBackdrop {},
-                shape = { RoundedRectangle(10.dp) },
-                effects = {
-                    vibrancy()
-                    blur(2f.dp.toPx())
-                    lens(6f.dp.toPx(), 12f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(surfaceColor) }
-            )
+            .glassCard(cornerRadius = 10.dp, blur = 2.dp, lensNear = 6.dp, lensFar = 12.dp)
             .padding(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

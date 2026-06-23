@@ -27,18 +27,11 @@ import com.dlzz.coder.ui.hosts.HostListScreen
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.sessions.SessionListScreen
 import com.dlzz.coder.ui.settings.SettingsScreen
+import com.dlzz.coder.ui.theme.accentColor
+import com.dlzz.coder.ui.theme.glassBottomBar
+import com.dlzz.coder.ui.theme.glassTabIndicator
+import com.dlzz.coder.ui.theme.rememberLayerBackdrop
 import com.dlzz.coder.viewmodel.BridgeViewModel
-import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.highlight.HighlightStyle
-import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
-import com.kyant.shapes.Capsule
 
 enum class MainTab { HOSTS, SESSIONS, FILES, SETTINGS }
 
@@ -105,11 +98,10 @@ private fun GlassBottomBar(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
     tabs: List<String>,
-    backdrop: Backdrop
+    backdrop: com.kyant.backdrop.Backdrop
 ) {
+    val accent = accentColor()
     val isLight = !isSystemInDarkTheme()
-    val accent = Color(0xFF0091FF)
-    val container = if (isLight) Color(0xFFFAFAFA).copy(0.4f) else Color(0xFF121212).copy(0.4f)
 
     Box(
         Modifier
@@ -117,16 +109,7 @@ private fun GlassBottomBar(
             .navigationBarsPadding()
             .padding(horizontal = 16.dp)
             .padding(bottom = 22.dp, top = 8.dp)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { Capsule() },
-                effects = {
-                    vibrancy()
-                    blur(8f.dp.toPx())
-                    lens(24f.dp.toPx(), 24f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(container) }
-            )
+            .glassBottomBar(backdrop = backdrop)
             .height(56.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -164,19 +147,7 @@ private fun GlassBottomBar(
                             Modifier
                                 .matchParentSize()
                                 .padding(horizontal = indicatorPadding)
-                                .drawBackdrop(
-                                    backdrop = backdrop,
-                                    shape = { Capsule() },
-                                    effects = {
-                                        lens(10f.dp.toPx(), 14f.dp.toPx())
-                                    },
-                                    highlight = { Highlight(style = HighlightStyle.Default()) },
-                                    shadow = { Shadow() },
-                                    innerShadow = { InnerShadow(radius = 4f.dp) },
-                                    onDrawSurface = {
-                                        drawRect(accent.copy(alpha = 0.15f))
-                                    }
-                                )
+                                .glassTabIndicator(backdrop = backdrop)
                         )
                     }
                     Text(

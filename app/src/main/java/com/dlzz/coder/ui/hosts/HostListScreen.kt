@@ -4,7 +4,6 @@ import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -52,14 +50,9 @@ import com.dlzz.coder.bridge.BridgeHost
 import com.dlzz.coder.scan.PortraitCaptureActivity
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.i18n.Strings
+import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.viewmodel.BridgeViewModel
 import com.google.zxing.integration.android.IntentIntegrator
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.shapes.RoundedRectangle
 
 @Composable
 fun HostListScreen(
@@ -278,22 +271,10 @@ private fun ScanLanDialog(
 
 @Composable
 private fun EmptyHostState(strings: Strings) {
-    val isDark = isSystemInDarkTheme()
     Box(
         Modifier
             .fillMaxWidth()
-            .drawBackdrop(
-                backdrop = rememberCanvasBackdrop {},
-                shape = { RoundedRectangle(16.dp) },
-                effects = {
-                    vibrancy()
-                    blur(4f.dp.toPx())
-                    lens(12f.dp.toPx(), 24f.dp.toPx())
-                },
-                onDrawSurface = {
-                    drawRect(if (isDark) Color.White.copy(0.06f) else Color.White.copy(0.5f))
-                }
-            )
+            .glassCard(cornerRadius = 16.dp)
             .padding(16.dp)
     ) {
         Text(strings.emptyHosts)
@@ -311,21 +292,10 @@ private fun HostCard(
     onDelete: () -> Unit,
     onNewSession: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    val surfaceColor = if (isDark) Color.White.copy(0.08f) else Color.White.copy(0.6f)
     Box(
         Modifier
             .fillMaxWidth()
-            .drawBackdrop(
-                backdrop = rememberCanvasBackdrop {},
-                shape = { RoundedRectangle(16.dp) },
-                effects = {
-                    vibrancy()
-                    blur(4f.dp.toPx())
-                    lens(12f.dp.toPx(), 24f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(surfaceColor) }
-            )
+            .glassCard(cornerRadius = 16.dp)
             .clickable(onClick = onSelect)
             .padding(16.dp)
     ) {

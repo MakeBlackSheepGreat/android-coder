@@ -1,7 +1,6 @@
 package com.dlzz.coder.ui.sessions
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,17 +23,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.dlzz.coder.bridge.HostSession
 import com.dlzz.coder.ui.i18n.AppStrings
+import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.viewmodel.BridgeViewModel
-import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.shapes.RoundedRectangle
 
 @Composable
 fun SessionListScreen(
@@ -82,22 +75,10 @@ fun SessionListScreen(
 
 @Composable
 private fun SessionCard(item: HostSession, onClick: () -> Unit) {
-    val isDark = isSystemInDarkTheme()
-    val surfaceColor = if (isDark) Color.White.copy(0.08f) else Color.White.copy(0.6f)
-
     Box(
         Modifier
             .fillMaxWidth()
-            .drawBackdrop(
-                backdrop = rememberCanvasBackdrop {},
-                shape = { RoundedRectangle(16.dp) },
-                effects = {
-                    vibrancy()
-                    blur(4f.dp.toPx())
-                    lens(12f.dp.toPx(), 24f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(surfaceColor) }
-            )
+            .glassCard(cornerRadius = 16.dp)
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
