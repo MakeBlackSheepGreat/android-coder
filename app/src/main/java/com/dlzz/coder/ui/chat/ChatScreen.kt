@@ -83,14 +83,16 @@ fun ChatScreen(
                     Text(
                         sessionDisplayInfo.first,
                         style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (sessionDisplayInfo.second.isNotEmpty()) {
                         Text(
                             sessionDisplayInfo.second,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

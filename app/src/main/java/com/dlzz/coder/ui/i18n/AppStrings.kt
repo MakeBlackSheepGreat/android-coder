@@ -79,7 +79,10 @@ data class Strings(
     val permissionRequestTitle: String,
     val permissionAllow: String,
     val permissionDeny: String,
-    val permissionRequestDesc: (String, String) -> String
+    val permissionRequestDesc: (String, String) -> String,
+    val renameSessionTitle: String,
+    val renameSessionLabel: String,
+    val renameSessionReset: String
 )
 
 object AppStrings {
@@ -158,7 +161,10 @@ object AppStrings {
         permissionRequestTitle = "权限请求",
         permissionAllow = "允许",
         permissionDeny = "拒绝",
-        permissionRequestDesc = { toolName, description -> "$toolName 请求权限：$description" }
+        permissionRequestDesc = { toolName, description -> "$toolName 请求权限：$description" },
+        renameSessionTitle = "重命名会话",
+        renameSessionLabel = "显示名称",
+        renameSessionReset = "重置"
     )
 
     private val en = Strings(
@@ -229,6 +235,9 @@ object AppStrings {
         permissionRequestTitle = "Permission request",
         permissionAllow = "Allow",
         permissionDeny = "Deny",
-        permissionRequestDesc = { toolName, description -> "$toolName requests permission: $description" }
+        permissionRequestDesc = { toolName, description -> "$toolName requests permission: $description" },
+        renameSessionTitle = "Rename session",
+        renameSessionLabel = "Display name",
+        renameSessionReset = "Reset"
     )
 }
