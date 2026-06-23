@@ -95,4 +95,90 @@ class ProtocolTest {
         val host = BridgeHost(id = "h1", name = "test", host = "localhost")
         assertFalse(host.connected)
     }
+
+    @Test
+    fun sessionInfo_fileBasename_extractsLastPathSegment() {
+        val s = SessionInfo(
+            sessionId = "s1",
+            workspacePath = "/home/user/projects/my-app"
+        )
+        assertEquals("my-app", s.fileBasename())
+    }
+
+    @Test
+    fun sessionInfo_fileBasename_handlesTrailingSlash() {
+        val s = SessionInfo(sessionId = "s1", workspacePath = "/home/user/projects/my-app/")
+        assertEquals("my-app", s.fileBasename())
+    }
+
+    @Test
+    fun sessionInfo_fileBasename_handlesWindowsPath() {
+        val s = SessionInfo(sessionId = "s1", workspacePath = "C:\\Users\\foo\\my-project")
+        assertEquals("my-project", s.fileBasename())
+    }
+
+    @Test
+    fun sessionInfo_fileBasename_emptyWhenNoPath() {
+        val s = SessionInfo(sessionId = "s1")
+        assertEquals("", s.fileBasename())
+    }
+
+    @Test
+    fun displayName_prefersLocalAlias() {
+        val s = SessionInfo(sessionId = "s1", title = "server-title", workspaceTitle = "ws-title")
+        assertEquals("my-alias", s.displayName("my-alias"))
+    }
+
+    @Test
+    fun displayName_fallsBackToTitle() {
+        val s = SessionInfo(sessionId = "s1", title = "server-title", workspaceTitle = "ws-title")
+        assertEquals("server-title", s.displayName())
+    }
+
+    @Test
+    fun displayName_fallsBackToWorkspaceTitle() {
+        val s = SessionInfo(sessionId = "s1", workspaceTitle = "ws-title")
+        assertEquals("ws-title", s.displayName())
+    }
+
+    @Test
+    fun displayName_fallsBackToFileBasename() {
+        val s = SessionInfo(sessionId = "s1", workspacePath = "/home/user/my-project")
+        assertEquals("my-project", s.displayName())
+    }
+
+    @Test
+    fun displayName_fallsBackToSessionIdPrefix() {
+        val s = SessionInfo(sessionId = "abcdefgh12345678")
+        assertEquals("abcdefgh1234", s.displayName())
+    }
+
+    @Test
+    fun displayMeta_combinesAllFields() {
+        val s = SessionInfo(
+            sessionId = "s1",
+            workspacePath = "/projects/my-app",
+            modelId = "gpt-4",
+            messageCount = 5
+        )
+        val meta = s.displayMeta("MyHost")
+        assertTrue(meta.contains("MyHost"))
+        assertTrue(meta.contains("my-app"))
+        assertTrue(meta.contains("gpt-4"))
+        assertTrue(meta.contains("5msgs"))
+    }
+
+    @Test
+    fun relativeTime_justNowForRecent() {
+        val now = 1_000_000L
+        val s = SessionInfo(sessionId = "s1", createdAt = now - 30_000L)
+        assertEquals("just now", s.relativeTime(now))
+    }
+
+    @Test
+    fun relativeTime_minutesForOlder() {
+        val now = 1_000_000L
+        val s = SessionInfo(sessionId = "s1", createdAt = now - 5 * 60_000L)
+        assertEquals("5m", s.relativeTime(now))
+    }
 }

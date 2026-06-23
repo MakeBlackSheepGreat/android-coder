@@ -4,7 +4,6 @@ import com.dlzz.coder.viewmodel.BridgeViewModel.Companion.expandCidr
 import com.dlzz.coder.viewmodel.BridgeViewModel.Companion.expandScanTarget
 import com.dlzz.coder.viewmodel.BridgeViewModel.Companion.ipv4ToLong
 import com.dlzz.coder.viewmodel.BridgeViewModel.Companion.longToIpv4
-import com.dlzz.coder.viewmodel.BridgeViewModel.Companion.parseConnectionPayload
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -108,65 +107,5 @@ class BridgeViewModelTest {
     fun expandCidr_invalidReturnsEmpty() {
         val result = expandCidr("not-a-cidr")
         assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun parseConnectionPayload_jsonFormat() {
-        val raw = """{"endpoint":"ws://192.168.1.100:8787","token":"dev-token","providerId":"mock","workspacePath":"/tmp","workspaceTitle":"test-ws"}"""
-        val parsed = parseConnectionPayload(raw)
-        assertEquals("192.168.1.100", parsed.host)
-        assertEquals(8787, parsed.port)
-        assertEquals("dev-token", parsed.token)
-        assertEquals("mock", parsed.providerId)
-        assertEquals("/tmp", parsed.workspacePath)
-        assertEquals("test-ws", parsed.workspaceTitle)
-        assertEquals("test-ws", parsed.name)
-    }
-
-    @Test
-    fun parseConnectionPayload_jsonFallbackName() {
-        val raw = """{"endpoint":"ws://10.0.0.5:9000","token":"abc"}"""
-        val parsed = parseConnectionPayload(raw)
-        assertEquals("10.0.0.5", parsed.host)
-        assertEquals(9000, parsed.port)
-        assertEquals("abc", parsed.token)
-        assertEquals("10.0.0.5:9000", parsed.name)
-    }
-
-    @Test
-    fun parseConnectionPayload_ngfScheme() {
-        val raw = "ngf-agent-bridge://?endpoint=ws%3A%2F%2F192.168.1.100%3A8787&token=dev-token&workspaceTitle=my-ws"
-        val parsed = parseConnectionPayload(raw)
-        assertEquals("192.168.1.100", parsed.host)
-        assertEquals(8787, parsed.port)
-        assertEquals("dev-token", parsed.token)
-        assertEquals("my-ws", parsed.name)
-    }
-
-    @Test
-    fun parseConnectionPayload_wsScheme() {
-        val raw = "ws://172.16.0.1:8787?token=my-token"
-        val parsed = parseConnectionPayload(raw)
-        assertEquals("172.16.0.1", parsed.host)
-        assertEquals(8787, parsed.port)
-        assertEquals("my-token", parsed.token)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun parseConnectionPayload_unsupportedFormatThrows() {
-        parseConnectionPayload("https://example.com/some/page")
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun parseConnectionPayload_jsonMissingHostThrows() {
-        val raw = """{"endpoint":"not-a-valid-url","token":"x"}"""
-        parseConnectionPayload(raw)
-    }
-
-    @Test
-    fun parseConnectionPayload_defaultsPortTo8787WhenAbsent() {
-        val raw = """{"endpoint":"ws://192.168.1.100","token":"x"}"""
-        val parsed = parseConnectionPayload(raw)
-        assertEquals(8787, parsed.port)
     }
 }

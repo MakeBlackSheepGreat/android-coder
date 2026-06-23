@@ -1,31 +1,47 @@
 package com.dlzz.coder.ui.sessions
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.dlzz.coder.bridge.HostSession
+import com.dlzz.coder.bridge.SessionInfo
 import com.dlzz.coder.ui.i18n.AppStrings
+import com.dlzz.coder.ui.i18n.Strings
 import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.viewmodel.BridgeViewModel
 
@@ -36,12 +52,15 @@ fun SessionListScreen(
 ) {
     val hostSessions by bridgeViewModel.hostSessions.collectAsState()
     val hosts by bridgeViewModel.hosts.collectAsState()
+    val aliases by bridgeViewModel.sessionAliases.collectAsState()
     val language by bridgeViewModel.language.collectAsState()
     val strings = AppStrings.of(language)
 
     LaunchedEffect(hosts) {
         bridgeViewModel.refreshAllSessions()
     }
+
+    var renamingSession by remember { mutableStateOf<HostSession?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -68,31 +87,145 @@ fun SessionListScreen(
             }
         }
         items(hostSessions, key = { it.host.id + ":" + it.session.sessionId }) { item ->
-            SessionCard(item, onClick = { onSessionClick(item.host.id, item.session.sessionId) })
+            SessionCard(
+                item = item,
+                alias = aliases[item.session.sessionId].orEmpty(),
+                strings = strings,
+                onClick = { onSessionClick(item.host.id, item.session.sessionId) },
+                onLongClick = { renamingSession = item }
+            )
+        }
+    }
+
+    renamingSession?.let { session ->
+        RenameSessionDialog(
+            currentName = session.session.displayName(aliases[session.session.sessionId].orEmpty()),
+            onDismiss = { renamingSession = null },
+            onConfirm = { newAlias ->
+                bridgeViewModel.renameSession(session.session.sessionId, newAlias)
+                renamingSession = null
+            },
+            onClear = {
+                bridgeViewModel.renameSession(session.session.sessionId, "")
+                renamingSession = null
+            },
+            strings = strings
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SessionCard(
+    item: HostSession,
+    alias: String,
+    strings: Strings,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val session = item.session
+    val title = session.displayName(alias)
+    val meta = session.displayMeta(item.host.name)
+    val time = session.relativeTime()
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .glassCard(cornerRadius = 16.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(16.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (time.isNotEmpty()) {
+                    Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (meta.isNotEmpty()) {
+                Text(
+                    meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (session.status.isNotBlank() && session.status != "idle") {
+                    StatusDot(status = session.status)
+                    Spacer(Modifier.width(2.dp))
+                }
+                AssistChip(onClick = {}, label = { Text(item.host.name) })
+                if (session.providerId.isNotBlank() && session.providerId != "mock") {
+                    AssistChip(onClick = {}, label = { Text(session.providerId) })
+                }
+            }
+            Text(
+                session.sessionId,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
         }
     }
 }
 
 @Composable
-private fun SessionCard(item: HostSession, onClick: () -> Unit) {
+private fun StatusDot(status: String) {
+    val color = when (status.lowercase()) {
+        "running", "active", "busy" -> androidx.compose.ui.graphics.Color(0xFF34C759)
+        "waiting", "paused" -> androidx.compose.ui.graphics.Color(0xFFFF9500)
+        "error", "failed" -> androidx.compose.ui.graphics.Color(0xFFFF3B30)
+        else -> androidx.compose.ui.graphics.Color.Gray
+    }
     Box(
         Modifier
-            .fillMaxWidth()
-            .glassCard(cornerRadius = 16.dp)
-            .clickable(onClick = onClick)
-            .padding(16.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(item.session.sessionId, style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = {}, label = { Text(item.host.name) })
-                if (item.session.providerId.isNotBlank()) {
-                    AssistChip(onClick = {}, label = { Text(item.session.providerId) })
-                }
-            }
-            if (item.session.workspacePath.isNotBlank()) {
-                Text(item.session.workspacePath, style = MaterialTheme.typography.bodySmall)
+            .size(8.dp)
+            .background(color, CircleShape)
+    )
+}
+
+@Composable
+private fun RenameSessionDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    onClear: () -> Unit,
+    strings: Strings
+) {
+    var text by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename session") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Display name") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text) }) { Text(strings.create) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onClear) { Text("Reset") }
+                TextButton(onClick = onDismiss) { Text(strings.cancel) }
             }
         }
-    }
+    )
 }

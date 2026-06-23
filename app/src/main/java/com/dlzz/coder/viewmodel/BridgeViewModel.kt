@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
@@ -55,6 +57,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     private data class PendingRequest(val hostId: String, val type: String)
 
     private val prefs = application.getSharedPreferences("bridge_hosts", Application.MODE_PRIVATE)
+    private val aliasPrefs = application.getSharedPreferences("session_aliases", Application.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val runtimes = mutableMapOf<String, HostRuntime>()
     private val pendingRequests = mutableMapOf<String, PendingRequest>()
@@ -79,6 +82,9 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _sessionEvents = MutableStateFlow<Map<String, List<ServerWireMessage>>>(emptyMap())
     val sessionEvents: StateFlow<Map<String, List<ServerWireMessage>>> = _sessionEvents
+
+    private val _sessionAliases = MutableStateFlow<Map<String, String>>(loadSessionAliases())
+    val sessionAliases: StateFlow<Map<String, String>> = _sessionAliases
 
     private val _pendingPermissions = MutableStateFlow<Map<String, List<PermissionRequest>>>(emptyMap())
     val pendingPermissions: StateFlow<Map<String, List<PermissionRequest>>> = _pendingPermissions
@@ -373,15 +379,73 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
         val sessionPayload = payload?.objectValue("session") ?: payload
         val sessionId = sessionPayload?.stringValue("sessionId")
             ?: sessionPayload?.stringValue("id")
+            ?: sessionPayload?.stringValue("remoteSessionId")
             ?: fallbackSessionId
         if (sessionId.isNullOrBlank()) return null
+
+        val title = sessionPayload?.stringValue("title")
+            ?: sessionPayload?.stringValue("displayTitle")
+            ?: sessionPayload?.stringValue("threadName")
+            ?: sessionPayload?.stringValue("conversationTitle")
+            ?: sessionPayload?.stringValue("name")
+            ?: sessionPayload?.stringValue("summary")
+            ?: sessionPayload?.stringValue("initialPrompt")
+            ?: sessionPayload?.stringValue("prompt")
+            ?: sessionPayload?.stringValue("firstMessage")
+            ?: sessionPayload?.stringValue("message")
+            ?: ""
+
+        val messageCount = sessionPayload?.stringValue("messageCount")?.toIntOrNull()
+            ?: sessionPayload?.stringValue("messages")?.toIntOrNull()
+            ?: sessionPayload?.stringValue("count")?.toIntOrNull()
+            ?: 0
 
         return SessionInfo(
             sessionId = sessionId,
             providerId = sessionPayload?.stringValue("providerId").orEmpty(),
             workspacePath = sessionPayload?.stringValue("workspacePath").orEmpty(),
-            createdAt = sessionPayload?.longValue("createdAt") ?: System.currentTimeMillis()
+            workspaceTitle = sessionPayload?.stringValue("workspaceTitle").orEmpty(),
+            title = title,
+            modelId = sessionPayload?.stringValue("modelId")
+                ?: sessionPayload?.stringValue("model")
+                ?: "",
+            branchName = sessionPayload?.stringValue("branchName")
+                ?: sessionPayload?.stringValue("branch")
+                ?: "",
+            messageCount = messageCount,
+            createdAt = sessionPayload?.longValue("createdAt") ?: System.currentTimeMillis(),
+            updatedAt = sessionPayload?.longValue("updatedAt")
+                ?: sessionPayload?.longValue("modifiedAt")
+                ?: 0L,
+            status = sessionPayload?.stringValue("status").orEmpty()
         )
+    }
+
+    fun renameSession(sessionId: String, alias: String) {
+        val current = _sessionAliases.value.toMutableMap()
+        if (alias.isBlank()) {
+            current.remove(sessionId)
+        } else {
+            current[sessionId] = alias.trim()
+        }
+        _sessionAliases.value = current
+        persistSessionAliases(current)
+        rebuildHostSessions()
+    }
+
+    fun sessionAlias(sessionId: String): String = _sessionAliases.value[sessionId].orEmpty()
+
+    private fun loadSessionAliases(): Map<String, String> {
+        val raw = aliasPrefs.getString(KEY_ALIASES, null) ?: return emptyMap()
+        return runCatching {
+            json.decodeFromString(MapSerializer(String.serializer(), String.serializer()), raw)
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun persistSessionAliases(map: Map<String, String>) {
+        aliasPrefs.edit()
+            .putString(KEY_ALIASES, json.encodeToString(MapSerializer(String.serializer(), String.serializer()), map))
+            .apply()
     }
 
     private fun parsePermissionRequest(payload: JsonObject?, fallbackSessionId: String): PermissionRequest? {
@@ -468,6 +532,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     companion object {
         private const val KEY_HOSTS = "hosts"
         private const val KEY_LANGUAGE = "language"
+        private const val KEY_ALIASES = "aliases"
         private const val PROTOCOL_VERSION = "agent-bridge.v1"
         private const val MAX_SCAN_CANDIDATES = 512
         private val scanHttpClient = OkHttpClient.Builder()

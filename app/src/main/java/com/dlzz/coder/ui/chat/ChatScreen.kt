@@ -52,9 +52,19 @@ fun ChatScreen(
     val toolCalls by chatViewModel.toolCalls.collectAsState()
     val language by bridgeViewModel.language.collectAsState()
     val pendingPermissions by bridgeViewModel.pendingPermissions.collectAsState()
+    val aliases by bridgeViewModel.sessionAliases.collectAsState()
+    val hostSessions by bridgeViewModel.hostSessions.collectAsState()
     val strings = AppStrings.of(language)
     val currentPermission = remember(pendingPermissions, hostId, sessionId) {
         pendingPermissions[bridgeViewModel.sessionEventKey(hostId, sessionId)]?.firstOrNull()
+    }
+    val sessionDisplayInfo = remember(hostSessions, aliases, sessionId) {
+        val hs = hostSessions.firstOrNull { it.host.id == hostId && it.session.sessionId == sessionId }
+        val session = hs?.session
+        val alias = aliases[sessionId].orEmpty()
+        val title = session?.displayName(alias) ?: sessionId.take(12)
+        val meta = session?.displayMeta(hs?.host?.name.orEmpty()) ?: ""
+        title to meta
     }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -68,7 +78,23 @@ fun ChatScreen(
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(sessionId.take(20) + "...") },
+            title = {
+                Column {
+                    Text(
+                        sessionDisplayInfo.first,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1
+                    )
+                    if (sessionDisplayInfo.second.isNotEmpty()) {
+                        Text(
+                            sessionDisplayInfo.second,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
+            },
             navigationIcon = { TextButton(onClick = onBack) { Text(strings.back) } }
         )
         LazyColumn(

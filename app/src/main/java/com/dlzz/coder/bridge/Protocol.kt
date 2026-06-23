@@ -86,10 +86,58 @@ data class ProviderInfo(
 
 data class SessionInfo(
     val sessionId: String,
-    val providerId: String,
-    val workspacePath: String,
-    val createdAt: Long
-)
+    val providerId: String = "",
+    val workspacePath: String = "",
+    val workspaceTitle: String = "",
+    val title: String = "",
+    val modelId: String = "",
+    val branchName: String = "",
+    val messageCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = 0L,
+    val status: String = ""
+) {
+    fun fileBasename(): String {
+        if (workspacePath.isBlank()) return ""
+        val trimmed = workspacePath.trimEnd('/', '\\')
+        val slashIdx = trimmed.lastIndexOfAny(charArrayOf('/', '\\'))
+        return if (slashIdx >= 0 && slashIdx < trimmed.length - 1) trimmed.substring(slashIdx + 1) else trimmed
+    }
+
+    fun displayName(localAlias: String = ""): String {
+        return when {
+            localAlias.isNotBlank() -> localAlias
+            title.isNotBlank() -> title
+            workspaceTitle.isNotBlank() -> workspaceTitle
+            fileBasename().isNotBlank() -> fileBasename()
+            else -> sessionId.take(12)
+        }
+    }
+
+    fun displayMeta(hostName: String = ""): String {
+        val parts = mutableListOf<String>()
+        if (hostName.isNotBlank()) parts += hostName
+        val ws = fileBasename().ifBlank { workspaceTitle }
+        if (ws.isNotBlank()) parts += ws
+        if (modelId.isNotBlank()) parts += modelId
+        if (branchName.isNotBlank()) parts += branchName
+        if (messageCount > 0) parts += "${messageCount}msgs"
+        return parts.joinToString(" · ")
+    }
+
+    fun relativeTime(now: Long = System.currentTimeMillis()): String {
+        val ts = if (updatedAt > 0) updatedAt else createdAt
+        if (ts <= 0) return ""
+        val diff = now - ts
+        return when {
+            diff < 60_000L -> "just now"
+            diff < 3_600_000L -> "${diff / 60_000L}m"
+            diff < 86_400_000L -> "${diff / 3_600_000L}h"
+            diff < 604_800_000L -> "${diff / 86_400_000L}d"
+            else -> "${diff / 604_800_000L}w"
+        }
+    }
+}
 
 data class ChatMessage(
     val role: String,
