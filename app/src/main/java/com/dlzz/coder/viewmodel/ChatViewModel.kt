@@ -3,9 +3,12 @@ package com.dlzz.coder.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dlzz.coder.bridge.ChatMessage
+import com.dlzz.coder.bridge.EventType
 import com.dlzz.coder.bridge.RequestType
 import com.dlzz.coder.bridge.ToolCall
 import com.dlzz.coder.bridge.ToolState
+import com.dlzz.coder.bridge.stringValue
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -16,10 +19,12 @@ class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
 
     private val _toolCalls = MutableStateFlow<List<ToolCall>>(emptyList())
     val toolCalls: StateFlow<List<ToolCall>> = _toolCalls
+    private var listenJob: Job? = null
+    private var processedCount = 0
 
-    fun sendMessage(sessionId: String, text: String) {
+    fun sendMessage(hostId: String, sessionId: String, text: String) {
         _messages.value = _messages.value + ChatMessage(role = "user", text = text)
-        bridgeViewModel.send(RequestType.MESSAGE_SEND, mapOf(
+        bridgeViewModel.send(hostId, RequestType.MESSAGE_SEND, mapOf(
             "sessionId" to sessionId,
             "text" to text
         ))
@@ -36,38 +41,78 @@ class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
         _messages.value = msgs
     }
 
-    fun startListening(sessionId: String) {
-        viewModelScope.launch {
+    fun startListening(hostId: String, sessionId: String) {
+        listenJob?.cancel()
+        processedCount = 0
+        listenJob = viewModelScope.launch {
             bridgeViewModel.sessionEvents.collect { sessionMap ->
-                val sessionMsgs = sessionMap[sessionId] ?: return@collect
-                for (msg in sessionMsgs) {
+                val sessionMsgs = sessionMap[bridgeViewModel.sessionEventKey(hostId, sessionId)].orEmpty()
+                for (msg in sessionMsgs.drop(processedCount)) {
                     when (msg.event) {
-                        "message.delta" -> {
-                            val text = msg.payload?.get("text")?.let { it.toString().trim('"') } ?: ""
+                        EventType.MESSAGE_DELTA -> {
+                            val text = msg.payload?.stringValue("text").orEmpty()
                             if (text.isNotEmpty()) appendAssistantDelta(text)
                         }
-                        "tool.started" -> {
-                            val toolId = msg.payload?.get("id")?.let { it.toString().trim('"') } ?: ""
-                            val toolName = msg.payload?.get("name")?.let { it.toString().trim('"') } ?: ""
+                        EventType.TOOL_STARTED -> {
+                            val toolId = msg.payload?.toolCallId().orEmpty()
+                            val toolName = msg.payload?.stringValue("name").orEmpty()
                             _toolCalls.value = _toolCalls.value + ToolCall(
                                 id = toolId,
                                 name = toolName,
                                 state = ToolState.STARTED
                             )
                         }
-                        "tool.completed" -> {
-                            val toolId = msg.payload?.get("id")?.let { it.toString().trim('"') } ?: ""
+                        EventType.TOOL_OUTPUT -> {
+                            val toolId = msg.payload?.toolCallId().orEmpty()
+                            val output = msg.payload?.stringValue("output")
+                                ?: msg.payload?.stringValue("text")
+                                ?: msg.payload?.stringValue("content")
+                                ?: ""
                             _toolCalls.value = _toolCalls.value.map {
-                                if (it.id == toolId) it.copy(state = ToolState.COMPLETED) else it
+                                if (it.id == toolId) {
+                                    it.copy(
+                                        state = ToolState.RUNNING,
+                                        output = it.output + output
+                                    )
+                                } else {
+                                    it
+                                }
                             }
                         }
-                        "error" -> {
+                        EventType.TOOL_COMPLETED -> {
+                            val toolId = msg.payload?.toolCallId().orEmpty()
+                            _toolCalls.value = _toolCalls.value.map {
+                                if (it.id == toolId) {
+                                    val output = msg.payload?.stringValue("output")
+                                        ?: msg.payload?.stringValue("text")
+                                        ?: msg.payload?.stringValue("content")
+                                        ?: it.output
+                                    it.copy(state = ToolState.COMPLETED, output = output)
+                                } else {
+                                    it
+                                }
+                            }
+                        }
+                        EventType.ERROR -> {
                             val errorMsg = msg.error?.message ?: "Unknown error"
-                            _messages.value = _messages.value + ChatMessage(role = "system", text = "Error: $errorMsg")
+                            _messages.value = _messages.value + ChatMessage(role = "system", text = "错误：$errorMsg")
                         }
                     }
                 }
+                processedCount = sessionMsgs.size
             }
         }
     }
+
+    override fun onCleared() {
+        listenJob?.cancel()
+    }
+}
+
+internal fun kotlinx.serialization.json.JsonObject.toolCallId(): String? {
+    return stringValue("toolCallId")
+        ?: stringValue("id")
+        ?: stringValue("toolUseId")
+        ?: stringValue("tool_use_id")
+        ?: stringValue("tool_call_id")
 }

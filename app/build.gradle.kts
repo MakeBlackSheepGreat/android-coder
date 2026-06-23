@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.dlzz.coder"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.dlzz.coder"
@@ -28,12 +28,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-
     buildFeatures {
         compose = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
     }
 }
 
@@ -48,10 +50,13 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.foundation)
+    implementation(libs.compose.animation)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.okhttp)
     implementation(libs.backdrop)
     implementation(libs.kyant.shapes)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.zxing.android.embedded)
+    testImplementation(libs.junit)
 }

@@ -7,8 +7,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.canvasBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop as kyantRememberLayerBackdrop
 
 val accentColor = Color(0xFF0091FF)
 val containerLight = Color(0xFFFAFAFA).copy(0.4f)
@@ -29,12 +29,12 @@ private val darkScheme = darkColorScheme(
 
 @Composable
 fun rememberGlassBackdrop(): Backdrop {
-    return canvasBackdrop()
+    return rememberCanvasBackdrop {}
 }
 
 @Composable
 fun rememberLayerBackdrop(): Backdrop {
-    return layerBackdrop()
+    return kyantRememberLayerBackdrop()
 }
 
 @Composable
