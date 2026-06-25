@@ -19,7 +19,7 @@ import io.noties.markwon.syntax.Prism4jThemeDarkula
 import io.noties.markwon.syntax.Prism4jThemeDefault
 import io.noties.markwon.syntax.SyntaxHighlightPlugin
 import io.noties.prism4j.Prism4j
-import io.noties.prism4j.GrammarLocatorDef
+import io.noties.prism4j.GrammarLocator
 
 @Composable
 fun MarkdownText(
@@ -32,7 +32,9 @@ fun MarkdownText(
     val isDark = isSystemInDarkTheme()
 
     val markwon = remember(isDark) {
-        val prism4j = Prism4j(GrammarLocatorDef())
+        val prism4j = Prism4j(object : GrammarLocator {
+            override fun grammar(language: String) = null
+        })
         val theme: Prism4jTheme = if (isDark) {
             Prism4jThemeDarkula.create()
         } else {
