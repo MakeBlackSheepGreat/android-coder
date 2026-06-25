@@ -85,6 +85,7 @@ fun SessionListScreen(
                     Text(
                         strings.sessionsSubtitle,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -100,7 +101,28 @@ fun SessionListScreen(
         }
         if (hostSessions.isEmpty()) {
             item {
-                Text(strings.emptySessions, style = MaterialTheme.typography.bodyMedium)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            strings.emptySessions,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "连接主机后创建会话",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
         }
         items(hostSessions, key = { it.host.id + ":" + it.session.sessionId }) { item ->
@@ -144,19 +166,20 @@ private fun SessionCard(
     // Meta line excludes hostName (shown in chip below) to avoid redundancy
     val meta = session.displayMeta(hostName = "")
     val time = session.relativeTime()
+    val isActive = session.status.lowercase() in listOf("running", "active", "busy")
 
     Box(
         Modifier
             .fillMaxWidth()
             .animateContentSize()
-            .glassCard(cornerRadius = 16.dp)
+            .glassCard(cornerRadius = 16.dp, blur = if (isActive) 4.dp else 3.dp)
             .glassCombinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(14.dp)
+            .padding(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -164,8 +187,10 @@ private fun SessionCard(
             ) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = if (isActive) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal
+                    ),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
@@ -184,13 +209,13 @@ private fun SessionCard(
                     meta,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
@@ -206,19 +231,33 @@ private fun SessionCard(
                     }
                     AssistChip(
                         onClick = {},
-                        label = { Text(item.host.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        label = {
+                            Text(
+                                item.host.name,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
                     )
                     if (session.providerId.isNotBlank() && session.providerId != "mock") {
                         AssistChip(
                             onClick = {},
-                            label = { Text(session.providerId, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            label = {
+                                Text(
+                                    session.providerId,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         )
                     }
                 }
                 Text(
                     "#${session.sessionId.take(8)}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     maxLines = 1
                 )
             }
@@ -234,7 +273,11 @@ private fun StatusDot(status: String) {
         "error", "failed" -> Color(0xFFFF3B30)
         else -> Color.Gray
     }
-    Box(Modifier.size(8.dp).background(color, CircleShape))
+    Box(
+        Modifier
+            .size(10.dp)
+            .background(color, CircleShape)
+    )
 }
 
 @Composable

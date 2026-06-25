@@ -143,7 +143,6 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun scanAndAddHosts(
-        targetText: String,
         port: Int = 8787,
         token: String = "",
         providerId: String = "",
@@ -152,43 +151,65 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         if (_scanState.value.running) return
         viewModelScope.launch {
-            _scanState.value = ScanState(running = true, message = "正在准备扫描")
-            val candidates = withContext(Dispatchers.IO) {
-                buildScanCandidates(targetText, port)
-            }
-            if (candidates.isEmpty()) {
-                _scanState.value = ScanState(message = "没有可扫描的目标")
-                return@launch
-            }
-
-            _scanState.value = ScanState(running = true, total = candidates.size, message = "正在扫描")
-            val found = withContext(Dispatchers.IO) {
-                scanHealthEndpoints(candidates)
-            }
-            var added = 0
-            for (candidate in found) {
-                val exists = _hosts.value.any { it.host == candidate.host && it.port == candidate.port }
-                if (!exists) {
-                    addHost(
-                        name = candidate.host + ":" + candidate.port,
-                        host = candidate.host,
-                        port = candidate.port,
-                        token = token,
-                        providerId = providerId,
-                        workspacePath = workspacePath,
-                        workspaceTitle = workspaceTitle,
-                        connectNow = token.isNotBlank()
-                    )
-                    added += 1
+            try {
+                _scanState.value = ScanState(running = true, message = "正在检测网络接口...")
+                val candidates = withContext(Dispatchers.IO) {
+                    buildScanCandidatesFromAllInterfaces(port)
                 }
+                if (candidates.isEmpty()) {
+                    _scanState.value = ScanState(message = "未检测到可用的网络接口")
+                    return@launch
+                }
+
+                _scanState.value = ScanState(running = true, total = candidates.size, message = "正在扫描 ${candidates.size} 个目标...")
+                val found = withContext(Dispatchers.IO) {
+                    scanHealthEndpointsWithProgress(candidates) { scanned ->
+                        _scanState.value = _scanState.value.copy(scanned = scanned)
+                    }
+                }
+                var added = 0
+                var skipped = 0
+                for (candidate in found) {
+                    val exists = _hosts.value.any { it.host == candidate.host && it.port == candidate.port }
+                    if (!exists) {
+                        addHost(
+                            name = candidate.host + ":" + candidate.port,
+                            host = candidate.host,
+                            port = candidate.port,
+                            token = token,
+                            providerId = providerId,
+                            workspacePath = workspacePath,
+                            workspaceTitle = workspaceTitle,
+                            connectNow = token.isNotBlank()
+                        )
+                        added += 1
+                    } else {
+                        skipped += 1
+                    }
+                }
+                val resultMsg = buildString {
+                    append("扫描完成：")
+                    if (added > 0) append("新增 $added 台")
+                    if (skipped > 0) {
+                        if (added > 0) append("，")
+                        append("已存在 $skipped 台")
+                    }
+                    if (added == 0 && skipped == 0) append("未发现可用主机")
+                }
+                _scanState.value = ScanState(
+                    running = false,
+                    scanned = candidates.size,
+                    total = candidates.size,
+                    added = added,
+                    message = resultMsg
+                )
+            } catch (e: Exception) {
+                LogCollector.e("BridgeVM", "Scan error: ${e.message}", e)
+                _scanState.value = ScanState(
+                    running = false,
+                    message = "扫描失败：${e.message}"
+                )
             }
-            _scanState.value = ScanState(
-                running = false,
-                scanned = candidates.size,
-                total = candidates.size,
-                added = added,
-                message = if (added > 0) "已添加 $added 台主机" else "未发现新的 Bridge 主机"
-            )
         }
     }
 
@@ -627,6 +648,23 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
 
+        private fun buildScanCandidatesFromAllInterfaces(port: Int): List<ScanCandidate> {
+            val prefixes = localInterfacePrefixes()
+            if (prefixes.isEmpty()) {
+                LogCollector.w("BridgeVM", "No active network interfaces found")
+                return emptyList()
+            }
+
+            LogCollector.i("BridgeVM", "Found ${prefixes.size} network interface(s): ${prefixes.joinToString()}")
+
+            return prefixes.flatMap { prefix ->
+                (1..254).map { "$prefix.$it" }
+            }
+                .distinct()
+                .take(MAX_SCAN_CANDIDATES)
+                .map { ScanCandidate(it, port) }
+        }
+
         private fun buildScanCandidates(targetText: String, port: Int): List<ScanCandidate> {
             val targets = targetText
                 .split(',', '\n', ';')
@@ -652,12 +690,21 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
             val interfaces = NetworkInterface.getNetworkInterfaces()
             for (networkInterface in interfaces) {
                 if (!networkInterface.isUp || networkInterface.isLoopback) continue
+
+                // Log interface info for debugging
+                val name = networkInterface.name
+                val displayName = networkInterface.displayName
+                LogCollector.d("BridgeVM", "Checking interface: $name ($displayName)")
+
                 val addresses = networkInterface.inetAddresses
                 for (address in addresses) {
                     if (address is Inet4Address && !address.isLoopbackAddress) {
-                        val parts = address.hostAddress.orEmpty().split('.')
+                        val ipAddress = address.hostAddress.orEmpty()
+                        val parts = ipAddress.split('.')
                         if (parts.size == 4) {
-                            result += parts.take(3).joinToString(".")
+                            val prefix = parts.take(3).joinToString(".")
+                            result += prefix
+                            LogCollector.d("BridgeVM", "Added prefix $prefix from $ipAddress on $name")
                         }
                     }
                 }
@@ -714,16 +761,29 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
             ).joinToString(".")
         }
 
-        private suspend fun scanHealthEndpoints(candidates: List<ScanCandidate>): List<ScanCandidate> {
+        private suspend fun scanHealthEndpointsWithProgress(
+            candidates: List<ScanCandidate>,
+            onProgress: (Int) -> Unit
+        ): List<ScanCandidate> {
             return coroutineScope {
-                candidates.chunked(32).flatMap { chunk ->
-                    chunk.map { candidate ->
+                val results = mutableListOf<ScanCandidate>()
+                var scanned = 0
+                candidates.chunked(16).forEach { chunk ->
+                    val chunkResults = chunk.map { candidate ->
                         async {
                             if (isBridgeHealthy(candidate)) candidate else null
                         }
                     }.awaitAll().filterNotNull()
+                    results.addAll(chunkResults)
+                    scanned += chunk.size
+                    onProgress(scanned)
                 }
+                results
             }
+        }
+
+        private suspend fun scanHealthEndpoints(candidates: List<ScanCandidate>): List<ScanCandidate> {
+            return scanHealthEndpointsWithProgress(candidates) { }
         }
 
         private fun isBridgeHealthy(candidate: ScanCandidate): Boolean {

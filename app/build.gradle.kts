@@ -58,5 +58,7 @@ dependencies {
     implementation(libs.kyant.shapes)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.zxing.android.embedded)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.syntax.highlight)
     testImplementation(libs.junit)
 }

@@ -16,6 +16,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 
 class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() {
@@ -28,27 +30,34 @@ class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val messageMutex = Mutex()
     private var listenJob: Job? = null
     private var processedCount = 0
     private var historyLoaded = false
 
     fun sendMessage(hostId: String, sessionId: String, text: String) {
-        _messages.value = _messages.value + ChatMessage(role = "user", text = text)
+        viewModelScope.launch {
+            messageMutex.withLock {
+                _messages.value = _messages.value + ChatMessage(role = "user", text = text)
+            }
+        }
         bridgeViewModel.send(hostId, RequestType.MESSAGE_SEND, mapOf(
             "sessionId" to sessionId,
             "text" to text
         ))
     }
 
-    fun appendAssistantDelta(text: String) {
-        val msgs = _messages.value.toMutableList()
-        val last = msgs.lastOrNull()
-        if (last != null && last.role == "assistant") {
-            msgs[msgs.lastIndex] = last.copy(text = last.text + text)
-        } else {
-            msgs.add(ChatMessage(role = "assistant", text = text))
+    suspend fun appendAssistantDelta(text: String) {
+        messageMutex.withLock {
+            val msgs = _messages.value.toMutableList()
+            val last = msgs.lastOrNull()
+            if (last != null && last.role == "assistant") {
+                msgs[msgs.lastIndex] = last.copy(text = last.text + text)
+            } else {
+                msgs.add(ChatMessage(role = "assistant", text = text))
+            }
+            _messages.value = msgs
         }
-        _messages.value = msgs
     }
 
     fun startListening(hostId: String, sessionId: String) {
@@ -68,7 +77,7 @@ class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
 
         listenJob = viewModelScope.launch {
             val historyTimeoutJob = launch {
-                delay(10_000L)
+                delay(15_000L) // Increased timeout to 15 seconds
                 if (!historyLoaded) {
                     LogCollector.w("ChatVM", "session.messages timed out for session=${sessionId.take(20)}")
                     _isLoading.value = false
@@ -148,7 +157,9 @@ class ChatViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
                             EventType.ERROR -> {
                                 val errorMsg = msg.error?.message ?: "Unknown error"
                                 LogCollector.e("ChatVM", "Error event: $errorMsg")
-                                _messages.value = _messages.value + ChatMessage(role = "system", text = "错误：$errorMsg")
+                                messageMutex.withLock {
+                                    _messages.value = _messages.value + ChatMessage(role = "system", text = "错误：$errorMsg")
+                                }
                                 _isLoading.value = false
                             }
                         }
