@@ -34,6 +34,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +60,7 @@ import com.dlzz.coder.ui.i18n.Strings
 import com.dlzz.coder.ui.theme.glassCard
 import com.dlzz.coder.ui.theme.glassClickable
 import com.dlzz.coder.viewmodel.BridgeViewModel
+import com.dlzz.coder.viewmodel.BridgeViewModel.ConnectionStatus
 import com.google.zxing.integration.android.IntentIntegrator
 
 @Composable
@@ -67,6 +69,7 @@ fun HostListScreen(
 ) {
     val hosts by bridgeViewModel.hosts.collectAsState()
     val sessionsByHost by bridgeViewModel.sessionsByHost.collectAsState()
+    val connectionStatus by bridgeViewModel.connectionStatus.collectAsState()
     val scanState by bridgeViewModel.scanState.collectAsState()
     val language by bridgeViewModel.language.collectAsState()
     val strings = AppStrings.of(language)
@@ -169,6 +172,7 @@ fun HostListScreen(
             HostCard(
                 host = host,
                 sessionCount = sessionsByHost[host.id].orEmpty().size,
+                connectionStatus = connectionStatus[host.id] ?: ConnectionStatus.DISCONNECTED,
                 strings = strings,
                 onSelect = { bridgeViewModel.selectHost(host.id) },
                 onConnect = { bridgeViewModel.connectHost(host.id) },
@@ -327,6 +331,7 @@ private fun EmptyHostState(strings: Strings) {
 private fun HostCard(
     host: BridgeHost,
     sessionCount: Int,
+    connectionStatus: ConnectionStatus,
     strings: Strings,
     onSelect: () -> Unit,
     onConnect: () -> Unit,
@@ -334,6 +339,8 @@ private fun HostCard(
     onDelete: () -> Unit,
     onNewSession: () -> Unit
 ) {
+    val isConnecting = connectionStatus == ConnectionStatus.CONNECTING
+    val isError = connectionStatus == ConnectionStatus.ERROR
     Box(
         Modifier
             .fillMaxWidth()
@@ -382,9 +389,23 @@ private fun HostCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.horizontalScroll(rememberScrollState())
             ) {
+                val statusLabel = when {
+                    host.connected -> strings.connected
+                    isConnecting -> strings.connecting
+                    isError -> strings.connectFailed
+                    else -> strings.disconnected
+                }
                 AssistChip(
                     onClick = {},
-                    label = { Text(if (host.connected) strings.connected else strings.disconnected, maxLines = 1) }
+                    leadingIcon = if (isConnecting) {
+                        {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    } else null,
+                    label = { Text(statusLabel, maxLines = 1) }
                 )
                 AssistChip(onClick = {}, label = { Text(strings.sessionCount(sessionCount), maxLines = 1) })
                 if (host.providerId.isNotBlank()) {
@@ -403,11 +424,21 @@ private fun HostCard(
                         Spacer(Modifier.width(6.dp))
                         Text(strings.newSession, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                } else if (isConnecting) {
+                    // Show connecting progress; allow cancel via disconnect
+                    OutlinedButton(onClick = onDisconnect, modifier = Modifier.weight(1f)) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(strings.connecting, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 } else {
                     Button(onClick = onConnect, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.connect, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (isError) strings.retry else strings.connect, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

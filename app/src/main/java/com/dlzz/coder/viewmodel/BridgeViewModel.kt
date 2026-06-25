@@ -42,6 +42,8 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class BridgeViewModel(application: Application) : AndroidViewModel(application) {
+    enum class ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
+
     data class ScanState(
         val running: Boolean = false,
         val scanned: Int = 0,
@@ -53,7 +55,8 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     private data class HostRuntime(
         val client: AgentBridgeClient,
         val connectedJob: Job,
-        val eventsJob: Job
+        val eventsJob: Job,
+        val timeoutJob: Job
     )
 
     private data class PendingRequest(val hostId: String, val type: String)
@@ -93,6 +96,10 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
+
+    // Per-host connection status for UI feedback (connecting / connected / error)
+    private val _connectionStatus = MutableStateFlow<Map<String, ConnectionStatus>>(emptyMap())
+    val connectionStatus: StateFlow<Map<String, ConnectionStatus>> = _connectionStatus
 
     private val _events = MutableStateFlow<List<ServerWireMessage>>(emptyList())
     val events: StateFlow<List<ServerWireMessage>> = _events
@@ -244,14 +251,22 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
         val bridgeHost = _hosts.value.firstOrNull { it.id == hostId } ?: return
         disconnectHost(hostId, updateState = false)
 
+        setConnectionStatus(hostId, ConnectionStatus.CONNECTING)
+        LogCollector.i("BridgeVM", "connectHost host=${bridgeHost.host}:${bridgeHost.port} id=${hostId.take(8)}")
+
         val client = AgentBridgeClient(bridgeHost.host, bridgeHost.port, bridgeHost.token)
-        client.connect()
+
         val connectedJob = viewModelScope.launch {
             client.connected.collect { connected ->
                 updateHost(hostId) { it.copy(connected = connected) }
                 updateGlobalConnectionState()
                 if (connected) {
+                    setConnectionStatus(hostId, ConnectionStatus.CONNECTED)
+                    runtimes[hostId]?.timeoutJob?.cancel()
                     listSessions(hostId)
+                } else if (_connectionStatus.value[hostId] == ConnectionStatus.CONNECTED) {
+                    // Was connected, dropped -> back to connecting while the client retries
+                    setConnectionStatus(hostId, ConnectionStatus.CONNECTING)
                 }
             }
         }
@@ -260,16 +275,33 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
                 handleHostMessage(hostId, message)
             }
         }
-        runtimes[hostId] = HostRuntime(client, connectedJob, eventsJob)
+        // Fail fast if the socket never opens (wrong host/token/non-bridge endpoint)
+        val timeoutJob = viewModelScope.launch {
+            delay(CONNECT_TIMEOUT_MS)
+            if (_connectionStatus.value[hostId] == ConnectionStatus.CONNECTING) {
+                LogCollector.w("BridgeVM", "connect timeout host=${hostId.take(8)}")
+                setConnectionStatus(hostId, ConnectionStatus.ERROR)
+            }
+        }
+
+        // Register runtime BEFORE connecting so onOpen->listSessions can find it (avoids dropped session.list)
+        runtimes[hostId] = HostRuntime(client, connectedJob, eventsJob, timeoutJob)
+        client.connect()
+    }
+
+    private fun setConnectionStatus(hostId: String, status: ConnectionStatus) {
+        _connectionStatus.value = _connectionStatus.value.toMutableMap().also { it[hostId] = status }
     }
 
     fun disconnectHost(hostId: String, updateState: Boolean = true) {
         val runtime = runtimes.remove(hostId)
         runtime?.connectedJob?.cancel()
         runtime?.eventsJob?.cancel()
+        runtime?.timeoutJob?.cancel()
         runtime?.client?.disconnect()
         if (updateState) {
             updateHost(hostId) { it.copy(connected = false) }
+            setConnectionStatus(hostId, ConnectionStatus.DISCONNECTED)
             updateGlobalConnectionState()
         }
     }
@@ -561,6 +593,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
         runtimes.values.forEach {
             it.connectedJob.cancel()
             it.eventsJob.cancel()
+            it.timeoutJob.cancel()
             it.client.disconnect()
         }
         runtimes.clear()
@@ -572,6 +605,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_ALIASES = "aliases"
         private const val PROTOCOL_VERSION = "agent-bridge.v1"
         private const val MAX_SCAN_CANDIDATES = 512
+        private const val CONNECT_TIMEOUT_MS = 12_000L
         private val scanHttpClient = OkHttpClient.Builder()
             .connectTimeout(450, TimeUnit.MILLISECONDS)
             .readTimeout(700, TimeUnit.MILLISECONDS)
