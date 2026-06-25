@@ -12,6 +12,7 @@ kyantShapes = "1.2.0"
 kotlinxSerializationJson = "1.7.3"
 zxingAndroidEmbedded = "4.3.0"
 junit = "4.13.2"
+markwon = "4.6.2"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -38,4 +39,6 @@ backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 kyant-shapes = { module = "io.github.kyant0:shapes", version.ref = "kyantShapes" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
+markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
+markwon-syntax-highlight = { module = "io.noties.markwon:syntax-highlight", version.ref = "markwon" }
 junit = { module = "junit:junit", version.ref = "junit" }

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.dlzz.coder.bridge.ChatMessage
 import com.dlzz.coder.bridge.ToolCall
 import com.dlzz.coder.bridge.ToolState
+import com.dlzz.coder.ui.components.MarkdownText
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.i18n.Strings
 import com.dlzz.coder.ui.theme.accentColor
@@ -82,9 +83,18 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     var inputText by remember { mutableStateOf("") }
 
+    // Auto-scroll only when user is near bottom
     LaunchedEffect(messages.size, toolCalls.size) {
         if (messages.isNotEmpty() || toolCalls.isNotEmpty()) {
-            scope.launch { listState.animateScrollToItem((messages.size + toolCalls.size).coerceAtLeast(0)) }
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = messages.size + toolCalls.size + 1 // +1 for header items
+            val isNearBottom = totalItems - lastVisibleIndex <= 3
+
+            if (isNearBottom) {
+                scope.launch {
+                    listState.animateScrollToItem((messages.size + toolCalls.size).coerceAtLeast(0))
+                }
+            }
         }
     }
 
@@ -171,11 +181,23 @@ fun ChatScreen(
             }
             if (toolCalls.isNotEmpty()) {
                 item {
-                    Text(
-                        strings.toolCallsTitle,
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            strings.toolCallsTitle,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            "${toolCalls.size} 个工具",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 items(toolCalls, key = { it.id }) { tool ->
                     ToolCallCard(tool, strings)
@@ -208,7 +230,10 @@ fun ChatScreen(
                     if (inputText.isNotBlank()) {
                         chatViewModel.sendMessage(hostId, sessionId, inputText)
                         inputText = ""
-                        scope.launch { listState.animateScrollToItem(messages.size) }
+                        // Always scroll to bottom when user sends a message
+                        scope.launch {
+                            listState.animateScrollToItem(messages.size + toolCalls.size)
+                        }
                     }
                 },
                 modifier = Modifier.height(52.dp),
@@ -260,27 +285,17 @@ private fun MessageBubble(msg: ChatMessage, isDark: Boolean, accent: Color) {
         isSystem -> if (isDark) Color(0xFFA32D2D).copy(0.15f) else Color(0xFFA32D2D).copy(0.1f)
         else -> if (isDark) Color.White.copy(0.08f) else Color.White.copy(0.6f)
     }
-    val bubbleModifier = if (isUser) {
-        Modifier
-            .glassBubble(cornerRadius = 16.dp, surfaceColor = surfaceColor)
-            .animateContentSize()
-            .padding(12.dp)
-            .widthIn(max = 320.dp)
-    } else {
-        Modifier
-            .glassBubble(cornerRadius = 16.dp, surfaceColor = surfaceColor)
-            .animateContentSize()
-            .padding(12.dp)
-            .widthIn(max = 320.dp)
-    }
+    val bubbleModifier = Modifier
+        .glassBubble(cornerRadius = 16.dp, surfaceColor = surfaceColor)
+        .animateContentSize()
+        .padding(14.dp)
+        .widthIn(max = 340.dp)
 
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        Box(
-            bubbleModifier
-        ) {
+        Box(bubbleModifier) {
             Column {
                 if (isSystem) {
                     Text(
@@ -288,15 +303,18 @@ private fun MessageBubble(msg: ChatMessage, isDark: Boolean, accent: Color) {
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isDark) Color(0xFFFF6B6B) else Color(0xFFA32D2D)
                     )
-                } else {
+                } else if (isUser) {
                     Text(
                         msg.text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isUser) {
-                            if (isDark) Color.White else Color.Black
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        color = if (isDark) Color.White else Color.Black
+                    )
+                } else {
+                    // Assistant message - use Markdown
+                    MarkdownText(
+                        markdown = msg.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -315,66 +333,88 @@ private fun ToolCallCard(tool: ToolCall, strings: Strings) {
         ToolState.ERROR -> Triple(strings.toolError, Icons.Default.Error, Color(0xFFA32D2D))
     }
 
+    val hasOutput = tool.output.isNotEmpty()
+    val outputLines = tool.output.lines()
+    val shouldShowExpandButton = outputLines.size > 5 || tool.output.length > 500
+
     Column(
         Modifier
             .fillMaxWidth()
             .animateContentSize()
-            .glassCard(cornerRadius = 12.dp, blur = 3.dp, lensNear = 8.dp, lensFar = 16.dp)
-            .padding(14.dp)
+            .glassCard(cornerRadius = 14.dp, blur = 3.dp, lensNear = 8.dp, lensFar = 16.dp)
+            .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(stateIcon, contentDescription = null, tint = stateColor, modifier = Modifier.size(18.dp))
-            Text(
-                tool.name.ifBlank { tool.id.take(8) },
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                stateIcon,
+                contentDescription = null,
+                tint = stateColor,
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(Modifier.weight(1f))
-            Text(
-                stateLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = stateColor
-            )
-        }
-        if (tool.output.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                strings.toolOutput,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(2.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color.Black.copy(if (isSystemInDarkTheme()) 0.3f else 0.05f)
-            ) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    tool.output,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(8.dp)
+                    tool.name.ifBlank { "工具 #${tool.id.take(8)}" },
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    stateLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = stateColor
                 )
             }
-            AnimatedVisibility(
-                visible = !expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                TextButton(onClick = { expanded = true }) {
-                    Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(14.dp))
+            if (hasOutput && shouldShowExpandButton) {
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "收起" else "展开",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
-            AnimatedVisibility(
-                visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+        }
+
+        if (hasOutput) {
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color.Black.copy(if (isSystemInDarkTheme()) 0.3f else 0.05f),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                TextButton(onClick = { expanded = false }) {
-                    Icon(Icons.Default.ExpandLess, contentDescription = null, modifier = Modifier.size(14.dp))
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        strings.toolOutput,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+
+                    Text(
+                        tool.output,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        maxLines = if (expanded) Int.MAX_VALUE else 5,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (!expanded && shouldShowExpandButton) {
+                        Text(
+                            "... 共 ${outputLines.size} 行",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
                 }
             }
         }

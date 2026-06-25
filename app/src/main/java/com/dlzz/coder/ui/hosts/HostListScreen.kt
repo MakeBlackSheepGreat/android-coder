@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
@@ -200,9 +203,8 @@ fun HostListScreen(
             strings = strings,
             scanState = scanState,
             onDismiss = { showScanDialog = false },
-            onStart = { targets, port, token ->
+            onStart = { port, token ->
                 bridgeViewModel.scanAndAddHosts(
-                    targetText = targets,
                     port = port,
                     token = token
                 )
@@ -228,65 +230,82 @@ private fun ScanLanDialog(
     strings: Strings,
     scanState: BridgeViewModel.ScanState,
     onDismiss: () -> Unit,
-    onStart: (String, Int, String) -> Unit
+    onStart: (Int, String) -> Unit
 ) {
-    var targets by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("8787") }
     var token by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!scanState.running) onDismiss() },
         title = { Text(strings.scanLanTitle) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = targets,
-                    onValueChange = { targets = it },
-                    label = { Text(strings.scanTargets) },
-                    placeholder = { Text(strings.scanTargetsHint) },
-                    minLines = 2,
-                    maxLines = 4
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "将自动扫描所有网络接口（包括 VPN）",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = port,
                     onValueChange = { port = it },
                     label = { Text(strings.port) },
+                    enabled = !scanState.running,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },
                     label = { Text(strings.token) },
                     placeholder = { Text(strings.scanTokenHint) },
-                    singleLine = true
+                    enabled = !scanState.running,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    text = when {
-                        scanState.running -> strings.scanRunning
-                        scanState.message.isNotBlank() -> scanState.message
-                        else -> strings.scanIdle
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (scanState.total > 0) {
+                if (scanState.running || scanState.message.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "${scanState.scanned}/${scanState.total}",
-                        style = MaterialTheme.typography.bodySmall
+                        text = scanState.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (scanState.running) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
                     )
+                    if (scanState.total > 0) {
+                        val progress = if (scanState.total > 0) {
+                            (scanState.scanned.toFloat() / scanState.total * 100).toInt()
+                        } else 0
+                        Text(
+                            text = "进度: ${scanState.scanned}/${scanState.total} ($progress%)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
                 enabled = !scanState.running,
-                onClick = { onStart(targets, port.toIntOrNull() ?: 8787, token) }
+                onClick = { onStart(port.toIntOrNull() ?: 8787, token) }
             ) {
-                Text(strings.startScan)
+                if (scanState.running) {
+                    Text(strings.scanRunning)
+                } else {
+                    Text(strings.startScan)
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(strings.cancel) }
+            TextButton(
+                enabled = !scanState.running,
+                onClick = onDismiss
+            ) {
+                Text(strings.cancel)
+            }
         }
     )
 }
@@ -406,6 +425,7 @@ private fun AddHostDialog(
     var host by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("8787") }
     var token by remember { mutableStateOf("") }
+    var showAdvanced by remember { mutableStateOf(false) }
     var providerId by remember { mutableStateOf("") }
     var workspacePath by remember { mutableStateOf("") }
     var workspaceTitle by remember { mutableStateOf("") }
@@ -415,19 +435,72 @@ private fun AddHostDialog(
         title = { Text(strings.addHost) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(strings.name) }, singleLine = true)
-                OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(strings.hostAddress) }, singleLine = true)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(strings.name) },
+                    placeholder = { Text("主机名称（可选）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = { host = it },
+                    label = { Text(strings.hostAddress) },
+                    placeholder = { Text("192.168.1.100") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     value = port,
                     onValueChange = { port = it },
                     label = { Text(strings.port) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(value = token, onValueChange = { token = it }, label = { Text(strings.token) }, singleLine = true)
-                OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(strings.providerId) }, singleLine = true)
-                OutlinedTextField(value = workspacePath, onValueChange = { workspacePath = it }, label = { Text(strings.workspacePath) }, singleLine = true)
-                OutlinedTextField(value = workspaceTitle, onValueChange = { workspaceTitle = it }, label = { Text(strings.workspaceTitle) }, singleLine = true)
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(strings.token) },
+                    placeholder = { Text("Token（可选）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "隐藏高级选项" else "显示高级选项")
+                    Icon(
+                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (showAdvanced) {
+                    OutlinedTextField(
+                        value = providerId,
+                        onValueChange = { providerId = it },
+                        label = { Text(strings.providerId) },
+                        placeholder = { Text("mock") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = workspacePath,
+                        onValueChange = { workspacePath = it },
+                        label = { Text(strings.workspacePath) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = workspaceTitle,
+                        onValueChange = { workspaceTitle = it },
+                        label = { Text(strings.workspaceTitle) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         },
         confirmButton = {
@@ -456,16 +529,62 @@ private fun NewSessionDialog(
     var providerId by remember { mutableStateOf(host.providerId.ifBlank { "mock" }) }
     var workspacePath by remember { mutableStateOf(host.workspacePath) }
     var workspaceTitle by remember { mutableStateOf(host.workspaceTitle) }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.newSession) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(host.name, style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(value = providerId, onValueChange = { providerId = it }, label = { Text(strings.providerId) }, singleLine = true)
-                OutlinedTextField(value = workspacePath, onValueChange = { workspacePath = it }, label = { Text(strings.workspacePath) }, singleLine = true)
-                OutlinedTextField(value = workspaceTitle, onValueChange = { workspaceTitle = it }, label = { Text(strings.workspaceTitle) }, singleLine = true)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "主机:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        host.name,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                OutlinedTextField(
+                    value = providerId,
+                    onValueChange = { providerId = it },
+                    label = { Text(strings.providerId) },
+                    placeholder = { Text("mock") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(if (showAdvanced) "隐藏高级选项" else "显示高级选项")
+                    Icon(
+                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (showAdvanced) {
+                    OutlinedTextField(
+                        value = workspacePath,
+                        onValueChange = { workspacePath = it },
+                        label = { Text(strings.workspacePath) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = workspaceTitle,
+                        onValueChange = { workspaceTitle = it },
+                        label = { Text(strings.workspaceTitle) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         },
         confirmButton = {

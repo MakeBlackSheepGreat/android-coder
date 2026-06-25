@@ -25,39 +25,49 @@ class FileViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel() 
 
     private val _preview = MutableStateFlow<FilePreview?>(null)
     val preview: StateFlow<FilePreview?> = _preview
-    private var processedCount = 0
+
     private var activeHostId = ""
     private var activeSessionId = ""
+    private val sessionEventCounts = mutableMapOf<String, Int>()
 
     init {
         viewModelScope.launch {
-            bridgeViewModel.eventsByHost.collect { eventMap ->
-                val messages = eventMap[activeHostId].orEmpty()
-                messages.drop(processedCount).forEach(::handleMessage)
-                processedCount = messages.size
+            bridgeViewModel.sessionEvents.collect { sessionMap ->
+                val key = sessionEventKey(activeHostId, activeSessionId)
+                val messages = sessionMap[key].orEmpty()
+                val lastProcessed = sessionEventCounts[key] ?: 0
+
+                messages.drop(lastProcessed).forEach(::handleMessage)
+                sessionEventCounts[key] = messages.size
             }
         }
     }
 
     fun listFiles(hostId: String, sessionId: String) {
         if (activeHostId != hostId || activeSessionId != sessionId) {
-            processedCount = 0
+            // Switching to a new session, reset state
+            activeHostId = hostId
+            activeSessionId = sessionId
+            _files.value = emptyList()
+            _preview.value = null
         }
-        activeHostId = hostId
-        activeSessionId = sessionId
         bridgeViewModel.send(hostId, RequestType.WORKSPACE_FILES_LIST, mapOf("sessionId" to sessionId))
     }
 
     fun getFile(hostId: String, sessionId: String, path: String) {
         if (activeHostId != hostId || activeSessionId != sessionId) {
-            processedCount = 0
+            activeHostId = hostId
+            activeSessionId = sessionId
+            _preview.value = null
         }
-        activeHostId = hostId
-        activeSessionId = sessionId
         bridgeViewModel.send(hostId, RequestType.WORKSPACE_FILE_GET, mapOf(
             "sessionId" to sessionId,
             "path" to path
         ))
+    }
+
+    private fun sessionEventKey(hostId: String, sessionId: String): String {
+        return "$hostId|$sessionId"
     }
 
     private fun handleMessage(message: ServerWireMessage) {
