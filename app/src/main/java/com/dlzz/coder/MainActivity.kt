@@ -5,6 +5,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -23,7 +31,40 @@ class MainActivity : ComponentActivity() {
                 val bridgeViewModel: BridgeViewModel by viewModels()
                 val navController = rememberNavController()
 
-                NavHost(navController = navController, startDestination = Routes.MAIN) {
+                NavHost(
+                    navController = navController,
+                    startDestination = Routes.MAIN,
+                    enterTransition = {
+                        slideInHorizontally(
+                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                            initialOffsetX = { it / 4 }
+                        ) + fadeIn(animationSpec = tween(220)) + scaleIn(
+                            initialScale = 0.985f,
+                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                        )
+                    },
+                    exitTransition = {
+                        slideOutHorizontally(
+                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                            targetOffsetX = { -it / 8 }
+                        ) + fadeOut(animationSpec = tween(180)) + scaleOut(
+                            targetScale = 0.99f,
+                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                        )
+                    },
+                    popEnterTransition = {
+                        slideInHorizontally(
+                            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                            initialOffsetX = { -it / 5 }
+                        ) + fadeIn(animationSpec = tween(220))
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(
+                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                            targetOffsetX = { it / 4 }
+                        ) + fadeOut(animationSpec = tween(160))
+                    }
+                ) {
                     composable(Routes.MAIN) {
                         MainScreen(
                             bridgeViewModel = bridgeViewModel,

@@ -119,14 +119,15 @@ data class SessionInfo(
         if (hostName.isNotBlank()) parts += hostName
         val ws = fileBasename().ifBlank { workspaceTitle }
         if (ws.isNotBlank()) parts += ws
-        if (modelId.isNotBlank()) parts += modelId
+        // "configured" is a server-side placeholder when the actual model is unknown
+        if (modelId.isNotBlank() && modelId != "configured") parts += modelId
         if (branchName.isNotBlank()) parts += branchName
         if (messageCount > 0) parts += "${messageCount}msgs"
         return parts.joinToString(" · ")
     }
 
     fun relativeTime(now: Long = System.currentTimeMillis()): String {
-        val ts = if (updatedAt > 0) updatedAt else createdAt
+        val ts = activityAt()
         if (ts <= 0) return ""
         val diff = now - ts
         return when {
@@ -137,6 +138,8 @@ data class SessionInfo(
             else -> "${diff / 604_800_000L}w"
         }
     }
+
+    fun activityAt(): Long = if (updatedAt > 0) updatedAt else createdAt
 }
 
 data class ChatMessage(

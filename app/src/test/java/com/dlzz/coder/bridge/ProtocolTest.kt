@@ -169,6 +169,21 @@ class ProtocolTest {
     }
 
     @Test
+    fun displayMeta_omitsConfiguredModelPlaceholder() {
+        val s = SessionInfo(
+            sessionId = "s1",
+            workspacePath = "/projects/my-app",
+            modelId = "configured",
+            messageCount = 5
+        )
+        val meta = s.displayMeta("MyHost")
+        assertTrue(meta.contains("MyHost"))
+        assertTrue(meta.contains("my-app"))
+        assertFalse(meta.contains("configured"))
+        assertTrue(meta.contains("5msgs"))
+    }
+
+    @Test
     fun relativeTime_justNowForRecent() {
         val now = 1_000_000L
         val s = SessionInfo(sessionId = "s1", createdAt = now - 30_000L)
@@ -180,5 +195,28 @@ class ProtocolTest {
         val now = 1_000_000L
         val s = SessionInfo(sessionId = "s1", createdAt = now - 5 * 60_000L)
         assertEquals("5m", s.relativeTime(now))
+    }
+
+    @Test
+    fun activityAt_prefersUpdatedAt() {
+        val s = SessionInfo(sessionId = "s1", createdAt = 100L, updatedAt = 500L)
+        assertEquals(500L, s.activityAt())
+    }
+
+    @Test
+    fun activityAt_fallsBackToCreatedAt() {
+        val s = SessionInfo(sessionId = "s1", createdAt = 100L, updatedAt = 0L)
+        assertEquals(100L, s.activityAt())
+    }
+
+    @Test
+    fun relativeTime_usesUpdatedAtWhenPresent() {
+        val now = 1_000_000L
+        val s = SessionInfo(
+            sessionId = "s1",
+            createdAt = now - 5 * 60_000L,
+            updatedAt = now - 30_000L
+        )
+        assertEquals("just now", s.relativeTime(now))
     }
 }

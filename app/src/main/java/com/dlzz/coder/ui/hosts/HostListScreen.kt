@@ -1,9 +1,10 @@
 package com.dlzz.coder.ui.hosts
 
+import androidx.compose.animation.animateContentSize
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -51,6 +54,7 @@ import com.dlzz.coder.scan.PortraitCaptureActivity
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.i18n.Strings
 import com.dlzz.coder.ui.theme.glassCard
+import com.dlzz.coder.ui.theme.glassClickable
 import com.dlzz.coder.viewmodel.BridgeViewModel
 import com.google.zxing.integration.android.IntentIntegrator
 
@@ -73,6 +77,7 @@ fun HostListScreen(
         val scanResult = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
         val contents = scanResult?.contents.orEmpty()
         if (contents.isNotBlank()) {
+            errorText = ""
             bridgeViewModel.addHostFromQr(contents)
                 .onFailure { errorText = it.message ?: strings.unsupportedQr }
         }
@@ -88,18 +93,31 @@ fun HostListScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(strings.hostsTitle, style = MaterialTheme.typography.headlineMedium)
-                    Text(strings.hostsSubtitle, style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        strings.hostsTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        strings.hostsSubtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { showAddDialog = true }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { showAddDialog = true; errorText = "" },
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(strings.add)
+                    Text(strings.add, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 OutlinedButton(
                     onClick = {
@@ -112,16 +130,20 @@ fun HostListScreen(
                             .setBeepEnabled(false)
                             .createScanIntent()
                         scannerLauncher.launch(intent)
-                    }
+                    },
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.QrCodeScanner, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(strings.scan)
+                    Text(strings.scan, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                OutlinedButton(onClick = { showScanDialog = true }) {
+                OutlinedButton(
+                    onClick = { showScanDialog = true },
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(Icons.Default.Search, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(strings.scanLan)
+                    Text(strings.scanLan, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -274,6 +296,7 @@ private fun EmptyHostState(strings: Strings) {
     Box(
         Modifier
             .fillMaxWidth()
+            .animateContentSize()
             .glassCard(cornerRadius = 16.dp)
             .padding(16.dp)
     ) {
@@ -295,8 +318,9 @@ private fun HostCard(
     Box(
         Modifier
             .fillMaxWidth()
+            .animateContentSize()
             .glassCard(cornerRadius = 16.dp)
-            .clickable(onClick = onSelect)
+            .glassClickable(onClick = onSelect)
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -306,43 +330,65 @@ private fun HostCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(host.name, style = MaterialTheme.typography.titleMedium)
-                    Text(host.address, style = MaterialTheme.typography.bodyMedium)
-                    if (host.workspacePath.isNotBlank()) {
-                        Text(host.workspacePath, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        host.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (host.address != host.name) {
+                        Text(
+                            host.address,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (host.workspacePath.isNotBlank() && host.workspacePath != host.name && host.workspacePath != host.address) {
+                        Text(
+                            host.workspacePath,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = strings.deleteHost)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
                 AssistChip(
                     onClick = {},
-                    label = { Text(if (host.connected) strings.connected else strings.disconnected) }
+                    label = { Text(if (host.connected) strings.connected else strings.disconnected, maxLines = 1) }
                 )
-                AssistChip(onClick = {}, label = { Text(strings.sessionCount(sessionCount)) })
+                AssistChip(onClick = {}, label = { Text(strings.sessionCount(sessionCount), maxLines = 1) })
                 if (host.providerId.isNotBlank()) {
-                    AssistChip(onClick = {}, label = { Text(host.providerId) })
+                    AssistChip(onClick = {}, label = { Text(host.providerId, maxLines = 1, overflow = TextOverflow.Ellipsis) })
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (host.connected) {
-                    OutlinedButton(onClick = onDisconnect) {
+                    OutlinedButton(onClick = onDisconnect, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Stop, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.disconnect)
+                        Text(strings.disconnect, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Button(onClick = onNewSession) {
+                    Button(onClick = onNewSession, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.newSession)
+                        Text(strings.newSession, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
-                    Button(onClick = onConnect) {
+                    Button(onClick = onConnect, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.connect)
+                        Text(strings.connect, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

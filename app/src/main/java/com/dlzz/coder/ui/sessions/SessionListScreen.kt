@@ -1,8 +1,8 @@
 package com.dlzz.coder.ui.sessions
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,7 @@ import com.dlzz.coder.bridge.HostSession
 import com.dlzz.coder.ui.i18n.AppStrings
 import com.dlzz.coder.ui.i18n.Strings
 import com.dlzz.coder.ui.theme.glassCard
+import com.dlzz.coder.ui.theme.glassCombinedClickable
 import com.dlzz.coder.viewmodel.BridgeViewModel
 
 @Composable
@@ -52,6 +55,7 @@ fun SessionListScreen(
     val hostSessions by bridgeViewModel.hostSessions.collectAsState()
     val hosts by bridgeViewModel.hosts.collectAsState()
     val aliases by bridgeViewModel.sessionAliases.collectAsState()
+    val isRefreshing by bridgeViewModel.isRefreshing.collectAsState()
     val language by bridgeViewModel.language.collectAsState()
     val strings = AppStrings.of(language)
 
@@ -71,12 +75,26 @@ fun SessionListScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(strings.sessionsTitle, style = MaterialTheme.typography.headlineMedium)
-                    Text(strings.sessionsSubtitle, style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        strings.sessionsTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        strings.sessionsSubtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
                 IconButton(onClick = { bridgeViewModel.refreshAllSessions() }) {
-                    Icon(Icons.Default.Refresh, contentDescription = strings.refreshSessions)
+                    if (isRefreshing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = strings.refreshSessions)
+                    }
                 }
             }
         }
@@ -113,7 +131,6 @@ fun SessionListScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionCard(
     item: HostSession,
@@ -124,20 +141,22 @@ private fun SessionCard(
 ) {
     val session = item.session
     val title = session.displayName(alias)
-    val meta = session.displayMeta(item.host.name)
+    // Meta line excludes hostName (shown in chip below) to avoid redundancy
+    val meta = session.displayMeta(hostName = "")
     val time = session.relativeTime()
 
     Box(
         Modifier
             .fillMaxWidth()
+            .animateContentSize()
             .glassCard(cornerRadius = 16.dp)
-            .combinedClickable(
+            .glassCombinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -148,8 +167,9 @@ private fun SessionCard(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                Spacer(Modifier.width(8.dp))
                 if (time.isNotEmpty()) {
                     Text(
                         time,
@@ -173,22 +193,35 @@ private fun SessionCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (session.status.isNotBlank() && session.status != "idle") {
-                    StatusDot(status = session.status)
-                    Spacer(Modifier.width(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    if (session.status.isNotBlank() && session.status != "idle") {
+                        StatusDot(status = session.status)
+                        Spacer(Modifier.width(2.dp))
+                    }
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(item.host.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    )
+                    if (session.providerId.isNotBlank() && session.providerId != "mock") {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(session.providerId, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        )
+                    }
                 }
-                AssistChip(onClick = {}, label = { Text(item.host.name, maxLines = 1) })
-                if (session.providerId.isNotBlank() && session.providerId != "mock") {
-                    AssistChip(onClick = {}, label = { Text(session.providerId, maxLines = 1) })
-                }
+                Text(
+                    "#${session.sessionId.take(8)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    maxLines = 1
+                )
             }
-            Text(
-                session.sessionId,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
@@ -225,7 +258,7 @@ private fun RenameSessionDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text) }) { Text(strings.create) }
+            TextButton(onClick = { onConfirm(text) }) { Text(strings.save) }
         },
         dismissButton = {
             Row {

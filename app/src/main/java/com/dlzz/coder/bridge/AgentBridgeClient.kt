@@ -1,6 +1,7 @@
 package com.dlzz.coder.bridge
 
 import android.util.Log
+import com.dlzz.coder.debug.LogCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.serialization.json.Json
@@ -41,25 +42,29 @@ class AgentBridgeClient(
     fun connect() {
         val wsUrl = "ws://$host:$port/ws?token=$token"
         val request = Request.Builder().url(wsUrl).header("Authorization", "Bearer $token").build()
+        LogCollector.i(tag, "Connecting to $wsUrl")
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(tag, "Connected")
+                LogCollector.i(tag, "Connected to $host:$port")
                 _connected.tryEmit(true)
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val msg = json.decodeFromString<ServerWireMessage>(text)
+                    if (msg.event.isNotBlank() && msg.event != "bridge.connected" && msg.event != "bridge.ping") {
+                        LogCollector.d(tag, "Recv event=${msg.event} session=${msg.sessionId.take(20)} ok=${msg.ok}")
+                    }
                     _events.tryEmit(msg)
                 } catch (e: Exception) {
-                    Log.e(tag, "Parse error: ${e.message}")
+                    LogCollector.e(tag, "Parse error: ${e.message}", e)
                 }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(tag, "Failure: ${t.message}")
+                LogCollector.e(tag, "Connection failure: ${t.message}", t)
                 _connected.tryEmit(false)
             }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(tag, "Closed: $reason")
+                LogCollector.w(tag, "Closed: code=$code reason=$reason")
                 _connected.tryEmit(false)
             }
         })

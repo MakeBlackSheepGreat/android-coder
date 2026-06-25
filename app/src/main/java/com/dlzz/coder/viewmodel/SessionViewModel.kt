@@ -83,7 +83,7 @@ class SessionViewModel(private val bridgeViewModel: BridgeViewModel) : ViewModel
         val next = _sessions.value
             .filterNot { it.sessionId == session.sessionId }
             .plus(session)
-            .sortedByDescending { it.createdAt }
+            .sortedByDescending { it.activityAt() }
         _sessions.value = next
     }
 }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -59,8 +60,8 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     private val prefs = application.getSharedPreferences("bridge_hosts", Application.MODE_PRIVATE)
     private val aliasPrefs = application.getSharedPreferences("session_aliases", Application.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private val runtimes = mutableMapOf<String, HostRuntime>()
-    private val pendingRequests = mutableMapOf<String, PendingRequest>()
+    private val runtimes = java.util.concurrent.ConcurrentHashMap<String, HostRuntime>()
+    private val pendingRequests = java.util.concurrent.ConcurrentHashMap<String, PendingRequest>()
 
     private val _hosts = MutableStateFlow<List<BridgeHost>>(emptyList())
     val hosts: StateFlow<List<BridgeHost>> = _hosts
@@ -97,6 +98,9 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _scanState = MutableStateFlow(ScanState())
     val scanState: StateFlow<ScanState> = _scanState
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
     init {
         _language.value = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, AppLanguage.ZH.code).orEmpty())
@@ -266,7 +270,14 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun refreshAllSessions() {
-        _hosts.value.filter { it.connected }.forEach { listSessions(it.id) }
+        val connected = _hosts.value.filter { it.connected }
+        if (connected.isEmpty()) return
+        _isRefreshing.value = true
+        connected.forEach { listSessions(it.id) }
+        viewModelScope.launch {
+            delay(800)
+            _isRefreshing.value = false
+        }
     }
 
     fun createSession(hostId: String, providerId: String = "", workspacePath: String = "", workspaceTitle: String = "") {
@@ -286,10 +297,14 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun send(hostId: String, type: String, payload: Map<String, Any?> = emptyMap()): String {
-        val runtime = runtimes[hostId] ?: return ""
+        val runtime = runtimes[hostId] ?: run {
+            com.dlzz.coder.debug.LogCollector.w("BridgeVM", "send: no runtime for hostId=$hostId type=$type")
+            return ""
+        }
         val id = runtime.client.send(type, payload)
         if (id.isNotBlank()) {
             pendingRequests[id] = PendingRequest(hostId, type)
+            com.dlzz.coder.debug.LogCollector.d("BridgeVM", "send type=$type reqId=$id host=${hostId.take(8)}")
         }
         return id
     }
@@ -481,7 +496,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
             val next = map[hostId].orEmpty()
                 .filterNot { it.sessionId == session.sessionId }
                 .plus(session)
-                .sortedByDescending { it.createdAt }
+                .sortedByDescending { it.activityAt() }
             map[hostId] = next
         }
         rebuildHostSessions()
@@ -492,7 +507,7 @@ class BridgeViewModel(application: Application) : AndroidViewModel(application) 
         _hostSessions.value = _sessionsByHost.value.flatMap { (hostId, sessions) ->
             val bridgeHost = hostsById[hostId] ?: return@flatMap emptyList()
             sessions.map { HostSession(bridgeHost, it) }
-        }.sortedByDescending { it.session.createdAt }
+        }.sortedByDescending { it.session.activityAt() }
     }
 
     private fun updateHost(hostId: String, update: (BridgeHost) -> BridgeHost) {

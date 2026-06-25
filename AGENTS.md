@@ -12,6 +12,18 @@ Android client (Compose) for the Agent Bridge protocol. Connects via WebSocket t
 ./gradlew testDebugUnitTest      # unit tests
 ```
 
+After any Android app code or resource change, always build a debug APK before finishing:
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+Report whether the build passed and the APK path:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
 **Requires JDK 21** — Gradle 8.9 does not run on JDK 25. Set `JAVA_HOME` accordingly.
 
 On this Windows machine a verified portable JDK 21 is available at:

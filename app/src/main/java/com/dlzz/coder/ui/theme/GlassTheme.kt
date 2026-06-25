@@ -1,12 +1,19 @@
 package com.dlzz.coder.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
@@ -20,7 +27,6 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 
@@ -55,11 +61,49 @@ private val darkScheme = darkColorScheme(
     onSurface = Color(0xFFE5E5EA)
 )
 
+private val appTypography = Typography().let { base ->
+    val platformStyle = PlatformTextStyle(includeFontPadding = true)
+    base.copy(
+        headlineMedium = base.headlineMedium.copy(platformStyle = platformStyle, lineHeight = base.headlineMedium.fontSize * 1.22f),
+        titleMedium = base.titleMedium.copy(platformStyle = platformStyle, lineHeight = base.titleMedium.fontSize * 1.28f),
+        titleSmall = base.titleSmall.copy(platformStyle = platformStyle, lineHeight = base.titleSmall.fontSize * 1.28f),
+        bodyMedium = base.bodyMedium.copy(platformStyle = platformStyle, lineHeight = base.bodyMedium.fontSize * 1.38f),
+        bodySmall = base.bodySmall.copy(platformStyle = platformStyle, lineHeight = base.bodySmall.fontSize * 1.34f),
+        labelLarge = base.labelLarge.copy(platformStyle = platformStyle, lineHeight = base.labelLarge.fontSize * 1.24f),
+        labelSmall = base.labelSmall.copy(platformStyle = platformStyle, lineHeight = base.labelSmall.fontSize * 1.22f)
+    )
+}
+
 @Composable
 fun rememberGlassBackdrop(): Backdrop = rememberCanvasBackdrop {}
 
 @Composable
 fun rememberLayerBackdrop(): Backdrop = kyantRememberLayerBackdrop()
+
+@Composable
+fun Modifier.glassClickable(
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = clickable(
+    interactionSource = remember { MutableInteractionSource() },
+    indication = null,
+    enabled = enabled,
+    onClick = onClick
+)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.glassCombinedClickable(
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+): Modifier = combinedClickable(
+    interactionSource = remember { MutableInteractionSource() },
+    indication = null,
+    enabled = enabled,
+    onClick = onClick,
+    onLongClick = onLongClick
+)
 
 @Composable
 fun Modifier.glassCard(
@@ -69,51 +113,59 @@ fun Modifier.glassCard(
     lensNear: Dp = 12.dp,
     lensFar: Dp = 24.dp,
     surfaceColor: Color = cardSurfaceColor()
-): Modifier = this.drawBackdrop(
-    backdrop = backdrop,
-    shape = { RoundedRectangle(cornerRadius) },
-    effects = {
-        vibrancy()
-        blur(blur.toPx())
-        lens(lensNear.toPx(), lensFar.toPx())
-    },
-    highlight = { Highlight(style = HighlightStyle.Default()) },
-    shadow = { Shadow() },
-    onDrawSurface = { drawRect(surfaceColor) }
-)
+): Modifier {
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { RoundedRectangle(cornerRadius) },
+        effects = {
+            vibrancy()
+            blur(blur.toPx())
+            lens(lensNear.toPx(), lensFar.toPx(), depthEffect = true)
+        },
+        highlight = { Highlight(style = HighlightStyle.Default()) },
+        innerShadow = { InnerShadow(radius = 2.dp) },
+        onDrawSurface = { drawRect(surfaceColor) }
+    )
+}
 
 @Composable
 fun Modifier.glassBubble(
     backdrop: Backdrop = rememberCanvasBackdrop {},
     cornerRadius: Dp = 12.dp,
     surfaceColor: Color
-): Modifier = this.drawBackdrop(
-    backdrop = backdrop,
-    shape = { RoundedRectangle(cornerRadius) },
-    effects = {
-        vibrancy()
-        blur(2.dp.toPx())
-        lens(8.dp.toPx(), 16.dp.toPx())
-    },
-    highlight = { Highlight(style = HighlightStyle.Default()) },
-    onDrawSurface = { drawRect(surfaceColor) }
-)
+): Modifier {
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { RoundedRectangle(cornerRadius) },
+        effects = {
+            vibrancy()
+            blur(2.dp.toPx())
+            lens(8.dp.toPx(), 16.dp.toPx(), depthEffect = true)
+        },
+        highlight = { Highlight(style = HighlightStyle.Default()) },
+        innerShadow = { InnerShadow(radius = 1.dp) },
+        onDrawSurface = { drawRect(surfaceColor) }
+    )
+}
 
 @Composable
 fun Modifier.glassCapsule(
     backdrop: Backdrop = rememberCanvasBackdrop {},
     surfaceColor: Color = cardSurfaceColor()
-): Modifier = this.drawBackdrop(
-    backdrop = backdrop,
-    shape = { Capsule() },
-    effects = {
-        vibrancy()
-        blur(2.dp.toPx())
-        lens(12.dp.toPx(), 24.dp.toPx())
-    },
-    highlight = { Highlight(style = HighlightStyle.Default()) },
-    onDrawSurface = { drawRect(surfaceColor) }
-)
+): Modifier {
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { Capsule() },
+        effects = {
+            vibrancy()
+            blur(2.dp.toPx())
+            lens(12.dp.toPx(), 24.dp.toPx(), depthEffect = true)
+        },
+        highlight = { Highlight(style = HighlightStyle.Default()) },
+        innerShadow = { InnerShadow(radius = 1.dp) },
+        onDrawSurface = { drawRect(surfaceColor) }
+    )
+}
 
 @Composable
 fun Modifier.glassDialog(
@@ -148,9 +200,11 @@ fun Modifier.glassBottomBar(
         shape = { Capsule() },
         effects = {
             vibrancy()
-            blur(8.dp.toPx())
-            lens(24.dp.toPx(), 24.dp.toPx())
+            blur(10.dp.toPx())
+            lens(24.dp.toPx(), 24.dp.toPx(), depthEffect = true)
         },
+        highlight = { Highlight(style = HighlightStyle.Default()) },
+        innerShadow = { InnerShadow(radius = 2.dp) },
         onDrawSurface = { drawRect(surfaceColor) }
     )
 }
@@ -167,7 +221,6 @@ fun Modifier.glassTabIndicator(
             lens(10.dp.toPx(), 14.dp.toPx(), chromaticAberration = true)
         },
         highlight = { Highlight(style = HighlightStyle.Default()) },
-        shadow = { Shadow() },
         innerShadow = { InnerShadow(radius = 4.dp) },
         onDrawSurface = { drawRect(accent.copy(alpha = 0.15f)) }
     )
@@ -177,5 +230,5 @@ fun Modifier.glassTabIndicator(
 fun GlassTheme(content: @Composable () -> Unit) {
     val isDark = isSystemInDarkTheme()
     val colors = if (isDark) darkScheme else lightScheme
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(colorScheme = colors, typography = appTypography, content = content)
 }
