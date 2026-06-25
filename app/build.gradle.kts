@@ -60,6 +60,5 @@ dependencies {
     implementation(libs.zxing.android.embedded)
     implementation(libs.markwon.core)
     implementation(libs.markwon.syntax.highlight)
-    implementation(libs.prism4j)
     testImplementation(libs.junit)
 }
