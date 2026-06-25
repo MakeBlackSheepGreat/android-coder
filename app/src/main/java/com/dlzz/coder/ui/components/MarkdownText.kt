@@ -14,13 +14,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
-import io.noties.markwon.syntax.Prism4jTheme
-import io.noties.markwon.syntax.Prism4jThemeDarkula
-import io.noties.markwon.syntax.Prism4jThemeDefault
-import io.noties.markwon.syntax.SyntaxHighlightPlugin
-import io.noties.prism4j.Prism4j
-import io.noties.prism4j.GrammarLocator
 
+/**
+ * Simple Markdown text component without syntax highlighting
+ * to avoid Prism4j dependency issues
+ */
 @Composable
 fun MarkdownText(
     markdown: String,
@@ -29,20 +27,9 @@ fun MarkdownText(
     style: TextStyle = LocalTextStyle.current
 ) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
 
-    val markwon = remember(isDark) {
-        val prism4j = Prism4j(object : GrammarLocator {
-            override fun grammar(language: String) = null
-        })
-        val theme: Prism4jTheme = if (isDark) {
-            Prism4jThemeDarkula.create()
-        } else {
-            Prism4jThemeDefault.create()
-        }
-
+    val markwon = remember {
         Markwon.builder(context)
-            .usePlugin(SyntaxHighlightPlugin.create(prism4j, theme))
             .build()
     }
 
