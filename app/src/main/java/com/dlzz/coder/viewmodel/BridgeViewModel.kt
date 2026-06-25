@@ -16,6 +16,7 @@ import com.dlzz.coder.bridge.arrayValue
 import com.dlzz.coder.bridge.longValue
 import com.dlzz.coder.bridge.objectValue
 import com.dlzz.coder.bridge.stringValue
+import com.dlzz.coder.debug.LogCollector
 import com.dlzz.coder.ui.i18n.AppLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
